@@ -96,6 +96,7 @@ def test_install_from_wheel_with_headers(script, data):
                                                       result.stdout)
 
 
+@pytest.mark.network
 def test_install_wheel_with_target(script, data):
     """
     Test installing a wheel using pip install --target
@@ -149,8 +150,7 @@ def test_install_from_wheel_no_deps(script, data):
     assert pkg_folder not in result.files_created
 
 
-# --user option is broken in pypy
-@pytest.mark.skipif("hasattr(sys, 'pypy_version_info')")
+@pytest.mark.network
 def test_install_user_wheel(script, virtualenv, data):
     """
     Test user install from wheel (that has a script)
@@ -304,3 +304,22 @@ def test_wheel_no_compiles_pyc(script, data):
     )
 
     assert not any(exists)
+
+
+def test_install_from_wheel_uninstalls_old_version(script, data):
+    # regression test for https://github.com/pypa/pip/issues/1825
+    package = data.packages.join("simplewheel-1.0-py2.py3-none-any.whl")
+    result = script.pip('install', package, '--no-index', expect_error=True)
+    package = data.packages.join("simplewheel-2.0-py2.py3-none-any.whl")
+    result = script.pip('install', package, '--no-index', expect_error=False)
+    dist_info_folder = script.site_packages / 'simplewheel-2.0.dist-info'
+    assert dist_info_folder in result.files_created
+    dist_info_folder = script.site_packages / 'simplewheel-1.0.dist-info'
+    assert dist_info_folder not in result.files_created
+
+
+def test_wheel_compile_syntax_error(script, data):
+    package = data.packages.join("compilewheel-1.0-py2.py3-none-any.whl")
+    result = script.pip('install', '--compile', package, '--no-index')
+    assert 'yield from' not in result.stdout
+    assert 'SyntaxError: ' not in result.stdout

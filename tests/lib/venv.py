@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import os
+import sys
 import subprocess
 
 import virtualenv as _virtualenv
@@ -27,6 +28,9 @@ class VirtualEnvironment(object):
         self._system_site_packages = kwargs.pop("system_site_packages", False)
 
         home, lib, inc, bin = _virtualenv.path_locations(self.location)
+        # workaround for https://github.com/pypa/virtualenv/issues/306
+        if hasattr(sys, "pypy_version_info"):
+            lib = os.path.join(home, 'lib-python', sys.version[:3])
         self.lib = Path(lib)
         self.bin = Path(bin)
 
@@ -52,12 +56,12 @@ class VirtualEnvironment(object):
 
         # Install our development version of pip install the virtual
         # environment
-        cmd = [self.bin.join("python"), "setup.py", "develop"]
+        cmd = [self.bin.join("python"), "setup.py", "install"]
         p = subprocess.Popen(
             cmd,
             cwd=self.pip_source_dir,
-            #stderr=subprocess.STDOUT,
-            #stdout=DEVNULL,
+            stderr=subprocess.STDOUT,
+            stdout=DEVNULL,
         )
         p.communicate()
         if p.returncode != 0:

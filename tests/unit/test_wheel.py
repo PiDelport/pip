@@ -1,10 +1,13 @@
 """Tests for wheel binary packages and .dist-info."""
-import pytest
+import os
 
-from mock import patch
-from pip import wheel
+import pytest
+from mock import patch, Mock
+
+from pip._vendor import pkg_resources
+from pip import pep425tags, wheel
 from pip.exceptions import InvalidWheelFilename, UnsupportedWheel
-from pip.util import unpack_file
+from pip.utils import unpack_file
 
 
 def test_get_entrypoints(tmpdir):
@@ -146,6 +149,90 @@ class TestWheelFile(object):
         w = wheel.Wheel('simple-0.1-py2-none-any.whl')
         assert not w.supported(tags=[('py1', 'none', 'any')])
 
+    @patch('sys.platform', 'darwin')
+    @patch('pip.pep425tags.get_abbr_impl', lambda: 'cp')
+    @patch('pip.pep425tags.get_platform', lambda: 'macosx_10_9_intel')
+    def test_supported_osx_version(self):
+        """
+        Wheels built for OS X 10.6 are supported on 10.9
+        """
+        tags = pep425tags.get_supported(['27'], False)
+        w = wheel.Wheel('simple-0.1-cp27-none-macosx_10_6_intel.whl')
+        assert w.supported(tags=tags)
+        w = wheel.Wheel('simple-0.1-cp27-none-macosx_10_9_intel.whl')
+        assert w.supported(tags=tags)
+
+    @patch('sys.platform', 'darwin')
+    @patch('pip.pep425tags.get_abbr_impl', lambda: 'cp')
+    @patch('pip.pep425tags.get_platform', lambda: 'macosx_10_6_intel')
+    def test_not_supported_osx_version(self):
+        """
+        Wheels built for OS X 10.9 are not supported on 10.6
+        """
+        tags = pep425tags.get_supported(['27'], False)
+        w = wheel.Wheel('simple-0.1-cp27-none-macosx_10_9_intel.whl')
+        assert not w.supported(tags=tags)
+
+    @patch('sys.platform', 'darwin')
+    @patch('pip.pep425tags.get_abbr_impl', lambda: 'cp')
+    def test_supported_multiarch_darwin(self):
+        """
+        Multi-arch wheels (intel) are supported on components (i386, x86_64)
+        """
+        with patch('pip.pep425tags.get_platform',
+                   lambda: 'macosx_10_5_universal'):
+            universal = pep425tags.get_supported(['27'], False)
+        with patch('pip.pep425tags.get_platform',
+                   lambda: 'macosx_10_5_intel'):
+            intel = pep425tags.get_supported(['27'], False)
+        with patch('pip.pep425tags.get_platform',
+                   lambda: 'macosx_10_5_x86_64'):
+            x64 = pep425tags.get_supported(['27'], False)
+        with patch('pip.pep425tags.get_platform',
+                   lambda: 'macosx_10_5_i386'):
+            i386 = pep425tags.get_supported(['27'], False)
+        with patch('pip.pep425tags.get_platform',
+                   lambda: 'macosx_10_5_ppc'):
+            ppc = pep425tags.get_supported(['27'], False)
+        with patch('pip.pep425tags.get_platform',
+                   lambda: 'macosx_10_5_ppc64'):
+            ppc64 = pep425tags.get_supported(['27'], False)
+
+        w = wheel.Wheel('simple-0.1-cp27-none-macosx_10_5_intel.whl')
+        assert w.supported(tags=intel)
+        assert w.supported(tags=x64)
+        assert w.supported(tags=i386)
+        assert not w.supported(tags=universal)
+        assert not w.supported(tags=ppc)
+        assert not w.supported(tags=ppc64)
+        w = wheel.Wheel('simple-0.1-cp27-none-macosx_10_5_universal.whl')
+        assert w.supported(tags=universal)
+        assert w.supported(tags=intel)
+        assert w.supported(tags=x64)
+        assert w.supported(tags=i386)
+        assert w.supported(tags=ppc)
+        assert w.supported(tags=ppc64)
+
+    @patch('sys.platform', 'darwin')
+    @patch('pip.pep425tags.get_abbr_impl', lambda: 'cp')
+    def test_not_supported_multiarch_darwin(self):
+        """
+        Single-arch wheels (x86_64) are not supported on multi-arch (intel)
+        """
+        with patch('pip.pep425tags.get_platform',
+                   lambda: 'macosx_10_5_universal'):
+            universal = pep425tags.get_supported(['27'], False)
+        with patch('pip.pep425tags.get_platform',
+                   lambda: 'macosx_10_5_intel'):
+            intel = pep425tags.get_supported(['27'], False)
+
+        w = wheel.Wheel('simple-0.1-cp27-none-macosx_10_5_i386.whl')
+        assert not w.supported(tags=intel)
+        assert not w.supported(tags=universal)
+        w = wheel.Wheel('simple-0.1-cp27-none-macosx_10_5_x86_64.whl')
+        assert not w.supported(tags=intel)
+        assert not w.supported(tags=universal)
+
     def test_support_index_min(self):
         """
         Test results from `support_index_min`
@@ -168,17 +255,16 @@ class TestWheelFile(object):
         assert w.support_index_min(tags=[]) is None
 
     def test_unpack_wheel_no_flatten(self):
-        from pip import util
+        from pip import utils
         from tempfile import mkdtemp
         from shutil import rmtree
-        import os
 
         filepath = '../data/packages/meta-1.0-py2.py3-none-any.whl'
         if not os.path.exists(filepath):
             pytest.skip("%s does not exist" % filepath)
         try:
             tmpdir = mkdtemp()
-            util.unpack_file(filepath, tmpdir, 'application/zip', None)
+            utils.unpack_file(filepath, tmpdir, 'application/zip', None)
             assert os.path.isdir(os.path.join(tmpdir, 'meta-1.0.dist-info'))
         finally:
             rmtree(tmpdir)
@@ -220,3 +306,85 @@ class TestPEP425Tags(object):
 
         with patch('pip.pep425tags.sysconfig.get_config_var', raises_ioerror):
             assert len(pip.pep425tags.get_supported())
+
+
+class TestMoveWheelFiles(object):
+    """
+    Tests for moving files from wheel src to scheme paths
+    """
+
+    def prep(self, data, tmpdir):
+        self.name = 'sample'
+        self.wheelpath = data.packages.join(
+            'sample-1.2.0-py2.py3-none-any.whl')
+        self.req = pkg_resources.Requirement.parse('sample')
+        self.src = os.path.join(tmpdir, 'src')
+        self.dest = os.path.join(tmpdir, 'dest')
+        unpack_file(self.wheelpath, self.src, None, None)
+        self.scheme = {
+            'scripts': os.path.join(self.dest, 'bin'),
+            'purelib': os.path.join(self.dest, 'lib'),
+            'data': os.path.join(self.dest, 'data'),
+        }
+        self.src_dist_info = os.path.join(
+            self.src, 'sample-1.2.0.dist-info')
+        self.dest_dist_info = os.path.join(
+            self.scheme['purelib'], 'sample-1.2.0.dist-info')
+
+    def assert_installed(self):
+        # lib
+        assert os.path.isdir(
+            os.path.join(self.scheme['purelib'], 'sample'))
+        # dist-info
+        metadata = os.path.join(self.dest_dist_info, 'METADATA')
+        assert os.path.isfile(metadata)
+        # data files
+        data_file = os.path.join(self.scheme['data'], 'my_data', 'data_file')
+        assert os.path.isfile(data_file)
+        # package data
+        pkg_data = os.path.join(
+            self.scheme['purelib'], 'sample', 'package_data.dat')
+        assert os.path.isfile(pkg_data)
+
+    def test_std_install(self, data, tmpdir):
+        self.prep(data, tmpdir)
+        wheel.move_wheel_files(
+            self.name, self.req, self.src, scheme=self.scheme)
+        self.assert_installed()
+
+    def test_dist_info_contains_empty_dir(self, data, tmpdir):
+        """
+        Test that empty dirs are not installed
+        """
+        # e.g. https://github.com/pypa/pip/issues/1632#issuecomment-38027275
+        self.prep(data, tmpdir)
+        src_empty_dir = os.path.join(
+            self.src_dist_info, 'empty_dir', 'empty_dir')
+        os.makedirs(src_empty_dir)
+        assert os.path.isdir(src_empty_dir)
+        wheel.move_wheel_files(
+            self.name, self.req, self.src, scheme=self.scheme)
+        self.assert_installed()
+        assert not os.path.isdir(
+            os.path.join(self.dest_dist_info, 'empty_dir'))
+
+
+class TestWheelBuilder(object):
+
+    def test_skip_building_wheels(self, caplog):
+        with patch('pip.wheel.WheelBuilder._build_one') as mock_build_one:
+            wheel_req = Mock(is_wheel=True, editable=False)
+            reqset = Mock(requirements=Mock(values=lambda: [wheel_req]))
+            wb = wheel.WheelBuilder(reqset, Mock(), '/wheel/dir')
+            wb.build()
+            assert "due to already being wheel" in caplog.text()
+            assert mock_build_one.mock_calls == []
+
+    def test_skip_building_editables(self, caplog):
+        with patch('pip.wheel.WheelBuilder._build_one') as mock_build_one:
+            editable_req = Mock(editable=True, is_wheel=False)
+            reqset = Mock(requirements=Mock(values=lambda: [editable_req]))
+            wb = wheel.WheelBuilder(reqset, Mock(), '/wheel/dir')
+            wb.build()
+            assert "due to being editable" in caplog.text()
+            assert mock_build_one.mock_calls == []

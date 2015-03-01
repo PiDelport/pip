@@ -1,4 +1,3 @@
-# #!/usr/bin/env python
 from __future__ import absolute_import
 
 import os
@@ -16,7 +15,6 @@ DATA_DIR = Path(__file__).folder.folder.join("data").abspath
 SRC_DIR = Path(__file__).abspath.folder.folder.folder
 
 pyversion = sys.version[:3]
-pyversion_nodot = "%d%d" % (sys.version_info[0], sys.version_info[1])
 
 
 def path_to_url(path):
@@ -69,6 +67,14 @@ class TestData(object):
         return self.root.join("packages2")
 
     @property
+    def packages3(self):
+        return self.root.join("packages3")
+
+    @property
+    def src(self):
+        return self.root.join("src")
+
+    @property
     def indexes(self):
         return self.root.join("indexes")
 
@@ -83,6 +89,10 @@ class TestData(object):
     @property
     def find_links2(self):
         return path_to_url(self.packages2)
+
+    @property
+    def find_links3(self):
+        return path_to_url(self.packages3)
 
     def index_url(self, index="simple"):
         return path_to_url(self.root.join("indexes", index))
@@ -130,11 +140,14 @@ class TestPipResult(object):
 
     def assert_installed(self, pkg_name, editable=True, with_files=[],
                          without_files=[], without_egg_link=False,
-                         use_user_site=False):
+                         use_user_site=False, sub_dir=False):
         e = self.test_env
 
         if editable:
             pkg_dir = e.venv / 'src' / pkg_name.lower()
+            # If package was installed in a sub directory
+            if sub_dir:
+                pkg_dir = pkg_dir / sub_dir
         else:
             without_egg_link = True
             pkg_dir = e.site_packages / pkg_name
@@ -151,7 +164,7 @@ class TestPipResult(object):
                     (egg_link_path, self)
                 )
         else:
-            if not egg_link_path in self.files_created:
+            if egg_link_path not in self.files_created:
                 raise TestFailure(
                     'expected egg link file missing: %r\n%s' %
                     (egg_link_path, self)
@@ -159,18 +172,19 @@ class TestPipResult(object):
 
             egg_link_file = self.files_created[egg_link_path]
 
-            if not (  # FIXME: I don't understand why there's a trailing . here
-                    egg_link_file.bytes.endswith('.')
-                    and egg_link_file.bytes[:-1].strip().endswith(pkg_dir)):
+            # FIXME: I don't understand why there's a trailing . here
+            if not (egg_link_file.bytes.endswith('\n.') and
+                    egg_link_file.bytes[:-2].endswith(pkg_dir)):
                 raise TestFailure(textwrap.dedent(u('''\
-                Incorrect egg_link file %r
-                Expected ending: %r
-                ------- Actual contents -------
-                %s
-                -------------------------------''' % (
+                    Incorrect egg_link file %r
+                    Expected ending: %r
+                    ------- Actual contents -------
+                    %s
+                    -------------------------------''' % (
                     egg_link_file,
-                    pkg_dir + u('\n.'),
-                    egg_link_file.bytes))))
+                    pkg_dir + '\n.',
+                    repr(egg_link_file.bytes))
+                )))
 
         if use_user_site:
             pth_file = e.user_site / 'easy-install.pth'
@@ -230,6 +244,9 @@ class PipTestEnvironment(scripttest.TestFileEnvironment):
         # Store paths related to the virtual environment
         _virtualenv = kwargs.pop("virtualenv")
         venv, lib, include, bin = virtualenv.path_locations(_virtualenv)
+        # workaround for https://github.com/pypa/virtualenv/issues/306
+        if hasattr(sys, "pypy_version_info"):
+            lib = os.path.join(venv, 'lib-python', pyversion)
         self.venv_path = venv
         self.lib_path = lib
         self.include_path = include
@@ -260,7 +277,6 @@ class PipTestEnvironment(scripttest.TestFileEnvironment):
         if environ is None:
             environ = os.environ.copy()
 
-        environ["PIP_LOG_FILE"] = base_path.join("pip-log.txt")
         environ["PATH"] = Path.pathsep.join(
             [self.bin_path] + [environ.get("PATH", [])],
         )
@@ -278,6 +294,8 @@ class PipTestEnvironment(scripttest.TestFileEnvironment):
             real_name = "%s_path" % name
             setattr(self, name, getattr(self, real_name) - self.base_path)
 
+        # Make sure temp_path is a Path object
+        self.temp_path = Path(self.temp_path)
         # Ensure the tmp dir exists, things break horribly if it doesn't
         self.temp_path.mkdir()
 
@@ -433,7 +451,7 @@ setup(name='version_subpkg',
     script.run('git', 'add', '.', cwd=version_pkg_path)
     script.run(
         'git', 'commit', '-q',
-        '--author', 'Pip <python-virtualenv@googlegroups.com>',
+        '--author', 'pip <pypa-dev@googlegroups.com>',
         '-am', 'initial version', cwd=version_pkg_path
     )
 
@@ -461,7 +479,7 @@ def _create_test_package(script):
     script.run('git', 'add', '.', cwd=version_pkg_path)
     script.run(
         'git', 'commit', '-q',
-        '--author', 'Pip <python-virtualenv@googlegroups.com>',
+        '--author', 'pip <pypa-dev@googlegroups.com>',
         '-am', 'initial version', cwd=version_pkg_path,
     )
     return version_pkg_path
@@ -478,7 +496,7 @@ def _change_test_package_version(script, version_pkg_path):
     )
     script.run(
         'git', 'commit', '-q',
-        '--author', 'Pip <python-virtualenv@googlegroups.com>',
+        '--author', 'pip <pypa-dev@googlegroups.com>',
         '-am', 'messed version',
         cwd=version_pkg_path,
         expect_stderr=True,

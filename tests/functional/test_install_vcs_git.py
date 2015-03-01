@@ -11,6 +11,7 @@ from tests.lib.git_submodule_helpers import (
 )
 
 
+@pytest.mark.network
 @pytest.mark.skip_if_missing('git')
 def test_get_refs_should_return_tag_name_and_commit_pair(script):
     version_pkg_path = _create_test_package(script)
@@ -26,6 +27,7 @@ def test_get_refs_should_return_tag_name_and_commit_pair(script):
     assert result['0.2'] == commit, result
 
 
+@pytest.mark.network
 @pytest.mark.skip_if_missing('git')
 def test_get_refs_should_return_branch_name_and_commit_pair(script):
     version_pkg_path = _create_test_package(script)
@@ -40,6 +42,7 @@ def test_get_refs_should_return_branch_name_and_commit_pair(script):
     assert result['branch0.1'] == commit, result
 
 
+@pytest.mark.network
 @pytest.mark.skip_if_missing('git')
 def test_get_refs_should_ignore_no_branch(script):
     version_pkg_path = _create_test_package(script)
@@ -90,6 +93,7 @@ def test_check_rev_options_should_handle_ambiguous_commit(get_refs_mock):
 
 # TODO(pnasrat) fix all helpers to do right things with paths on windows.
 @pytest.mark.skipif("sys.platform == 'win32'")
+@pytest.mark.network
 @pytest.mark.skip_if_missing('git')
 def test_check_submodule_addition(script):
     """

@@ -7,9 +7,12 @@ between parses. pip parse's general options twice internally, and shouldn't
 pass on state. To be consistent, all options will follow this design.
 
 """
+from __future__ import absolute_import
+
 import copy
 from optparse import OptionGroup, SUPPRESS_HELP, Option
-from pip.locations import build_prefix, default_log_file
+from pip.index import PyPI
+from pip.locations import CA_BUNDLE_PATH, USER_CACHE_DIR, src_prefix
 
 
 def make_option_group(group, parser):
@@ -47,6 +50,17 @@ help_ = OptionMaker(
     action='help',
     help='Show help.')
 
+isolated_mode = OptionMaker(
+    "--isolated",
+    dest="isolated_mode",
+    action="store_true",
+    default=False,
+    help=(
+        "Run pip in an isolated mode, ignoring environment variables and user "
+        "configuration."
+    ),
+)
+
 require_virtualenv = OptionMaker(
     # Run only if inside a virtualenv, bail if not.
     '--require-virtualenv', '--require-venv',
@@ -77,10 +91,11 @@ quiet = OptionMaker(
     help='Give less output.')
 
 log = OptionMaker(
-    '--log',
-    dest='log',
-    metavar='path',
-    help='Path to a verbose appending log. This log is inactive by default.')
+    "--log", "--log-file", "--local-log",
+    dest="log",
+    metavar="path",
+    help="Path to a verbose appending log."
+)
 
 log_explicit_levels = OptionMaker(
     # Writes the log levels explicitely to the log'
@@ -89,15 +104,6 @@ log_explicit_levels = OptionMaker(
     action='store_true',
     default=False,
     help=SUPPRESS_HELP)
-
-log_file = OptionMaker(
-    # The default log file
-    '--log-file', '--local-log',
-    dest='log_file',
-    metavar='path',
-    default=default_log_file,
-    help='Path to a verbose non-appending log, that only logs failures. This '
-         'log is active by default at %default.')
 
 no_input = OptionMaker(
     # Don't ask for input
@@ -113,6 +119,14 @@ proxy = OptionMaker(
     type='str',
     default='',
     help="Specify a proxy in the form [user:passwd@]proxy.server:port.")
+
+retries = OptionMaker(
+    '--retries',
+    dest='retries',
+    type='int',
+    default=5,
+    help="Maximum number of retries each connection should attempt "
+         "(default %default times).")
 
 timeout = OptionMaker(
     '--timeout', '--default-timeout',
@@ -154,15 +168,24 @@ cert = OptionMaker(
     '--cert',
     dest='cert',
     type='str',
-    default='',
+    default=CA_BUNDLE_PATH,
     metavar='path',
     help="Path to alternate CA bundle.")
+
+client_cert = OptionMaker(
+    '--client-cert',
+    dest='client_cert',
+    type='str',
+    default=None,
+    metavar='path',
+    help="Path to SSL client certificate, a single file containing the "
+         "private key and the certificate in PEM format.")
 
 index_url = OptionMaker(
     '-i', '--index-url', '--pypi-url',
     dest='index_url',
     metavar='URL',
-    default='https://pypi.python.org/simple/',
+    default=PyPI.simple_url,
     help='Base URL of Python Package Index (default %default).')
 
 extra_index_url = OptionMaker(
@@ -190,7 +213,7 @@ find_links = OptionMaker(
          "If a local path or file:// url that's a directory, then look for "
          "archives in the directory listing.")
 
-# TODO: Remove after 1.6
+# TODO: Remove after 6.0
 use_mirrors = OptionMaker(
     '-M', '--use-mirrors',
     dest='use_mirrors',
@@ -198,7 +221,7 @@ use_mirrors = OptionMaker(
     default=False,
     help=SUPPRESS_HELP)
 
-# TODO: Remove after 1.6
+# TODO: Remove after 6.0
 mirrors = OptionMaker(
     '--mirrors',
     dest='mirrors',
@@ -213,7 +236,7 @@ allow_external = OptionMaker(
     action="append",
     default=[],
     metavar="PACKAGE",
-    help="Allow the installation of externally hosted files",
+    help="Allow the installation of a package even if it is externally hosted",
 )
 
 allow_all_external = OptionMaker(
@@ -221,10 +244,20 @@ allow_all_external = OptionMaker(
     dest="allow_all_external",
     action="store_true",
     default=False,
-    help="Allow the installation of all externally hosted files",
+    help="Allow the installation of all packages that are externally hosted",
 )
 
-# Remove after 1.7
+trusted_host = OptionMaker(
+    "--trusted-host",
+    dest="trusted_hosts",
+    action="append",
+    metavar="HOSTNAME",
+    default=[],
+    help="Mark this host as trusted, even though it does not have valid or "
+         "any HTTPS.",
+)
+
+# Remove after 7.0
 no_allow_external = OptionMaker(
     "--no-allow-external",
     dest="allow_all_external",
@@ -233,23 +266,33 @@ no_allow_external = OptionMaker(
     help=SUPPRESS_HELP,
 )
 
-# Remove --allow-insecure after 1.7
+# Remove --allow-insecure after 7.0
 allow_unsafe = OptionMaker(
     "--allow-unverified", "--allow-insecure",
     dest="allow_unverified",
     action="append",
     default=[],
     metavar="PACKAGE",
-    help="Allow the installation of insecure and unverifiable files",
+    help="Allow the installation of a package even if it is hosted "
+    "in an insecure and unverifiable way",
 )
 
-# Remove after 1.7
+# Remove after 7.0
 no_allow_unsafe = OptionMaker(
     "--no-allow-insecure",
     dest="allow_all_insecure",
     action="store_false",
     default=False,
     help=SUPPRESS_HELP
+)
+
+# Remove after 1.5
+process_dependency_links = OptionMaker(
+    "--process-dependency-links",
+    dest="process_dependency_links",
+    action="store_true",
+    default=False,
+    help="Enable the processing of dependency links.",
 )
 
 requirements = OptionMaker(
@@ -260,6 +303,26 @@ requirements = OptionMaker(
     metavar='file',
     help='Install from the given requirements file. '
     'This option can be used multiple times.')
+
+editable = OptionMaker(
+    '-e', '--editable',
+    dest='editables',
+    action='append',
+    default=[],
+    metavar='path/url',
+    help=('Install a project in editable mode (i.e. setuptools '
+          '"develop mode") from a local project path or a VCS url.'),
+)
+
+src = OptionMaker(
+    '--src', '--source', '--source-dir', '--source-directory',
+    dest='src_dir',
+    metavar='dir',
+    default=src_prefix,
+    help='Directory to check out editable projects into. '
+    'The default in a virtualenv is "<venv path>/src". '
+    'The default for global installs is "<current dir>/src".'
+)
 
 use_wheel = OptionMaker(
     '--use-wheel',
@@ -277,12 +340,26 @@ no_use_wheel = OptionMaker(
           'find-links locations.'),
 )
 
+cache_dir = OptionMaker(
+    "--cache-dir",
+    dest="cache_dir",
+    default=USER_CACHE_DIR,
+    metavar="dir",
+    help="Store the cache data in <dir>."
+)
+
+no_cache = OptionMaker(
+    "--no-cache-dir",
+    dest="cache_dir",
+    action="store_false",
+    help="Disable the cache.",
+)
+
 download_cache = OptionMaker(
     '--download-cache',
     dest='download_cache',
-    metavar='dir',
     default=None,
-    help='Cache downloaded packages in <dir>.')
+    help=SUPPRESS_HELP)
 
 no_deps = OptionMaker(
     '--no-deps', '--no-dependencies',
@@ -295,10 +372,8 @@ build_dir = OptionMaker(
     '-b', '--build', '--build-dir', '--build-directory',
     dest='build_dir',
     metavar='dir',
-    default=build_prefix,
-    help='Directory to unpack packages into and build in. '
-    'The default in a virtualenv is "<venv path>/build". '
-    'The default for global installs is "<OS temp dir>/pip_build_<username>".')
+    help='Directory to unpack packages into and build in.'
+)
 
 install_options = OptionMaker(
     '--install-option',
@@ -325,6 +400,13 @@ no_clean = OptionMaker(
     default=False,
     help="Don't clean up build directories.")
 
+disable_pip_version_check = OptionMaker(
+    "--disable-pip-version-check",
+    dest="disable_pip_version_check",
+    action="store_true",
+    default=False,
+    help="Don't periodically check PyPI to determine whether a new version "
+         "of pip is available for download. Implied with --no-index.")
 
 ##########
 # groups #
@@ -334,20 +416,26 @@ general_group = {
     'name': 'General Options',
     'options': [
         help_,
+        isolated_mode,
         require_virtualenv,
         verbose,
         version,
         quiet,
-        log_file,
         log,
         log_explicit_levels,
         no_input,
         proxy,
+        retries,
         timeout,
         default_vcs,
         skip_requirements_regex,
         exists_action,
+        trusted_host,
         cert,
+        client_cert,
+        cache_dir,
+        no_cache,
+        disable_pip_version_check,
     ]
 }
 
@@ -365,5 +453,6 @@ index_group = {
         no_allow_external,
         allow_unsafe,
         no_allow_unsafe,
+        process_dependency_links,
     ]
 }

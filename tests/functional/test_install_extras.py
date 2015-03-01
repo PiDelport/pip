@@ -1,6 +1,8 @@
+import pytest
 from os.path import join
 
 
+@pytest.mark.network
 def test_simple_extras_install_from_pypi(script):
     """
     Test installing a package from PyPI using extras dependency Paste[openid].
@@ -12,6 +14,26 @@ def test_simple_extras_install_from_pypi(script):
     assert initools_folder in result.files_created, result.files_created
 
 
+def test_extras_after_wheel(script, data):
+    """
+    Test installing a package with extras after installing from a wheel.
+    """
+    simple = script.site_packages / 'simple'
+
+    no_extra = script.pip(
+        'install', '--no-index', '-f', data.find_links,
+        'requires_simple_extra', expect_stderr=True,
+    )
+    assert simple not in no_extra.files_created, no_extra.files_created
+
+    extra = script.pip(
+        'install', '--no-index', '-f', data.find_links,
+        'requires_simple_extra[extra]', expect_stderr=True,
+    )
+    assert simple in extra.files_created, extra.files_created
+
+
+@pytest.mark.network
 def test_no_extras_uninstall(script):
     """
     No extras dependency gets uninstalled when the root package is uninstalled
@@ -28,4 +50,4 @@ def test_no_extras_uninstall(script):
     result2 = script.pip('uninstall', 'Paste', '-y')
     # openid should not be uninstalled
     initools_folder = script.site_packages / 'openid'
-    assert not initools_folder in result2.files_deleted, result.files_deleted
+    assert initools_folder not in result2.files_deleted, result.files_deleted

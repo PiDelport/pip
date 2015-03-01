@@ -1,8 +1,11 @@
 import pytest
-from tests.lib import _create_test_package, _change_test_package_version
+
+from tests.lib import (_create_test_package, _change_test_package_version,
+                       pyversion)
 from tests.lib.local_repos import local_checkout
 
 
+@pytest.mark.network
 @pytest.mark.skip_if_missing('git')
 def test_install_editable_from_git_with_https(script, tmpdir):
     """
@@ -20,6 +23,27 @@ def test_install_editable_from_git_with_https(script, tmpdir):
     result.assert_installed('pip-test-package', with_files=['.git'])
 
 
+@pytest.mark.network
+def test_install_noneditable_git(script, tmpdir):
+    """
+    Test installing from a non-editable git URL with a given tag.
+    """
+    result = script.pip(
+        'install',
+        'git+https://github.com/pypa/pip-test-package.git'
+        '@0.1.1#egg=pip-test-package'
+    )
+    egg_info_folder = (
+        script.site_packages /
+        'pip_test_package-0.1.1-py%s.egg-info' % pyversion
+    )
+    result.assert_installed('piptestpackage',
+                            without_egg_link=True,
+                            editable=False)
+    assert egg_info_folder in result.files_created, str(result)
+
+
+@pytest.mark.network
 @pytest.mark.skip_if_missing('git')
 def test_git_with_sha1_revisions(script):
     """
@@ -40,6 +64,7 @@ def test_git_with_sha1_revisions(script):
     assert '0.1' in version.stdout, version.stdout
 
 
+@pytest.mark.network
 @pytest.mark.skip_if_missing('git')
 def test_git_with_branch_name_as_revision(script):
     """
@@ -60,6 +85,7 @@ def test_git_with_branch_name_as_revision(script):
     assert 'some different version' in version.stdout
 
 
+@pytest.mark.network
 @pytest.mark.skip_if_missing('git')
 def test_git_with_tag_name_as_revision(script):
     """
@@ -80,6 +106,7 @@ def test_git_with_tag_name_as_revision(script):
     assert '0.1' in version.stdout
 
 
+@pytest.mark.network
 @pytest.mark.skip_if_missing('git')
 def test_git_with_tag_name_and_update(script, tmpdir):
     """
@@ -106,6 +133,7 @@ def test_git_with_tag_name_and_update(script, tmpdir):
     assert '0.1.2' in result.stdout
 
 
+@pytest.mark.network
 @pytest.mark.skip_if_missing('git')
 def test_git_branch_should_not_be_changed(script, tmpdir):
     """
@@ -125,6 +153,7 @@ def test_git_branch_should_not_be_changed(script, tmpdir):
     assert '* master' in result.stdout, result.stdout
 
 
+@pytest.mark.network
 @pytest.mark.skip_if_missing('git')
 def test_git_with_non_editable_unpacking(script, tmpdir):
     """
@@ -142,6 +171,7 @@ def test_git_with_non_editable_unpacking(script, tmpdir):
     assert '0.1.2' in result.stdout
 
 
+@pytest.mark.network
 @pytest.mark.skip_if_missing('git')
 def test_git_with_editable_where_egg_contains_dev_string(script, tmpdir):
     """
@@ -159,6 +189,7 @@ def test_git_with_editable_where_egg_contains_dev_string(script, tmpdir):
     result.assert_installed('django-devserver', with_files=['.git'])
 
 
+@pytest.mark.network
 @pytest.mark.skip_if_missing('git')
 def test_git_with_non_editable_where_egg_contains_dev_string(script, tmpdir):
     """
@@ -177,6 +208,7 @@ def test_git_with_non_editable_where_egg_contains_dev_string(script, tmpdir):
     assert devserver_folder in result.files_created, str(result)
 
 
+@pytest.mark.network
 @pytest.mark.skip_if_missing('git')
 def test_git_with_ambiguous_revs(script):
     """
@@ -195,6 +227,7 @@ def test_git_with_ambiguous_revs(script):
     result.assert_installed('version-pkg', with_files=['.git'])
 
 
+@pytest.mark.network
 @pytest.mark.skip_if_missing('git')
 def test_git_works_with_editable_non_origin_repo(script):
     # set up, create a git repo and install it as editable from a local

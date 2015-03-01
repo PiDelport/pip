@@ -2,8 +2,10 @@ from __future__ import absolute_import
 
 import os
 import subprocess
+
+from pip._vendor.six.moves.urllib import request as urllib_request
+
 from pip.vcs import subversion, git, bazaar, mercurial
-from pip.backwardcompat import urlretrieve
 from tests.lib import path_to_url
 
 
@@ -18,7 +20,7 @@ def _create_initools_repository(directory):
 
 
 def _dump_initools_repository(directory):
-    filename, _ = urlretrieve(
+    filename, _ = urllib_request.urlretrieve(
         'http://bitbucket.org/hltbra/pip-initools-dump/raw/8b55c908a320/'
         'INITools_modified.dump'
     )
@@ -73,7 +75,7 @@ def _get_vcs_and_checkout_url(remote_repository, directory):
 def local_checkout(remote_repo, directory):
     if not os.path.exists(directory):
         os.mkdir(directory)
-        #os.makedirs(directory)
+        # os.makedirs(directory)
 
     if remote_repo.startswith('svn'):
         _create_svn_repository_for_initools(directory)

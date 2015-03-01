@@ -6,10 +6,9 @@ from docutils import nodes
 from docutils.parsers import rst
 from docutils.statemachine import ViewList
 from textwrap import dedent
-from pip import commands
+from pip.commands import commands_dict as commands
 from pip import cmdoptions
-from pip.locations import default_log_file
-from pip.util import get_prog
+from pip.utils import get_prog
 
 
 class PipCommandUsage(rst.Directive):
@@ -54,14 +53,10 @@ class PipOptions(rst.Directive):
         if option.takes_value():
             metavar = option.metavar or option.dest.lower()
             line += " <%s>" % metavar.lower()
-        #fix defaults
+        # fix defaults
         opt_help = option.help.replace('%default', str(option.default))
-        #fix paths with sys.prefix
+        # fix paths with sys.prefix
         opt_help = opt_help.replace(sys.prefix, "<sys.prefix>")
-        opt_help = opt_help.replace(
-            default_log_file,
-            "<see :ref:`FileLogging`>",
-        )
         return [bookmark_line, "", line, "", "    %s" % opt_help, ""]
 
     def _format_options(self, options, cmd_name=None):

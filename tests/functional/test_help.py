@@ -3,7 +3,7 @@ import pytest
 from pip.exceptions import CommandError
 from pip.basecommand import ERROR, SUCCESS
 from pip.commands.help import HelpCommand
-from pip.commands import commands
+from pip.commands import commands_dict as commands
 from mock import Mock
 
 
@@ -84,6 +84,6 @@ def test_help_commands_equally_functional(script):
             continue
 
         assert (
-            script.pip('help', name).stdout
-            == script.pip(name, '--help').stdout
+            script.pip('help', name).stdout ==
+            script.pip(name, '--help').stdout
         )

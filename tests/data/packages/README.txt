@@ -44,11 +44,15 @@ for testing finder logic when name *contains* the name of the package specified
 
 HackedEggInfo
 -------------
-has it's own egg_info class
+has its own egg_info class
 
 LineEndings
 -----------
 contains DOS line endings
+
+LocalExtras
+-----------
+has an extra in a local file:// dependency link
 
 parent/child-0.1.tar.gz
 -----------------------
@@ -84,6 +88,8 @@ meta-1.0-py2.py3-none-any.whl
 --------------------------------------------------
 Is an empty package which install_requires the simple and simple2 packages.
 
-
+requires_simple_extra-0.1-py2.py3-none-any.whl
+----------------------------------------------
+requires_simple_extra[extra] requires simple==1.0
 
 

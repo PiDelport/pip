@@ -1,17 +1,16 @@
 """
 tests specific to uninstalling --user installs
 """
-from os.path import isdir, isfile
 import pytest
+from os.path import isdir, isfile
 
 from tests.lib import pyversion, assert_all_changes
 from tests.functional.test_install_user import _patch_dist_in_site_packages
 
 
-# --user option is broken in pypy
-@pytest.mark.skipif("hasattr(sys, 'pypy_version_info')")
 class Tests_UninstallUserSite:
 
+    @pytest.mark.network
     def test_uninstall_from_usersite(self, script, virtualenv):
         """
         Test uninstall from usersite
@@ -68,7 +67,7 @@ class Tests_UninstallUserSite:
         virtualenv.system_site_packages = True
         script.user_site_path.makedirs()
 
-        #install
+        # install
         to_install = data.packages.join("FSPkg")
         result1 = script.pip(
             'install', '--user', '-e', to_install, expect_error=False,
@@ -76,7 +75,7 @@ class Tests_UninstallUserSite:
         egg_link = script.user_site / 'FSPkg.egg-link'
         assert egg_link in result1.files_created, str(result1.stdout)
 
-        #uninstall
+        # uninstall
         result2 = script.pip('uninstall', '-y', 'FSPkg')
         assert not isfile(script.base_path / egg_link)
 

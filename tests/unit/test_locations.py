@@ -28,7 +28,7 @@ class TestLocations:
         self.username = "example"
         self.patch()
 
-    def tearDown(self):
+    def teardown(self):
         self.revert_patch()
         shutil.rmtree(self.tempdir, ignore_errors=True)
 
@@ -89,7 +89,7 @@ class TestLocations:
         from pip import locations
         assert locations._get_build_prefix() == self.get_build_dir_location()
 
-    #skip on windows, build dir is not created
+    # skip on windows, build dir is not created
     @pytest.mark.skipif("sys.platform == 'win32'")
     @pytest.mark.skipif("not hasattr(os, 'O_NOFOLLOW')")
     def test_dir_created(self):
@@ -103,7 +103,7 @@ class TestLocations:
         assert os.path.exists(self.get_build_dir_location()), \
             "the build_prefix directory should now exist!"
 
-    #skip on windows, build dir is not created
+    # skip on windows, build dir is not created
     @pytest.mark.skipif("sys.platform == 'win32'")
     def test_dir_created_without_NOFOLLOW(self, monkeypatch):
         """ test that the build_prefix directory is generated when
@@ -118,7 +118,7 @@ class TestLocations:
         assert os.path.exists(self.get_build_dir_location()), \
             "the build_prefix directory should now exist!"
 
-    #skip on windows; this exception logic only runs on linux
+    # skip on windows; this exception logic only runs on linux
     @pytest.mark.skipif("sys.platform == 'win32'")
     @pytest.mark.skipif("not hasattr(os, 'O_NOFOLLOW')")
     def test_error_raised_when_owned_by_another(self):
@@ -132,7 +132,7 @@ class TestLocations:
         with pytest.raises(pip.exceptions.InstallationError):
             locations._get_build_prefix()
 
-    #skip on windows; this exception logic only runs on linux
+    # skip on windows; this exception logic only runs on linux
     @pytest.mark.skipif("sys.platform == 'win32'")
     def test_error_raised_when_owned_by_another_without_NOFOLLOW(
             self, monkeypatch):
@@ -166,7 +166,7 @@ class TestDisutilsScheme:
 
         for key, value in norm_scheme.items():
             expected = os.path.join("/test/root/", os.path.abspath(value)[1:])
-            assert root_scheme[key] == expected
+            assert os.path.abspath(root_scheme[key]) == expected
 
     def test_distutils_config_file_read(self, tmpdir, monkeypatch):
         f = tmpdir.mkdir("config").join("setup.cfg")
@@ -180,3 +180,17 @@ class TestDisutilsScheme:
         )
         scheme = distutils_scheme('example')
         assert scheme['scripts'] == '/somewhere/else'
+
+    def test_install_lib_takes_precedence(self, tmpdir, monkeypatch):
+        f = tmpdir.mkdir("config").join("setup.cfg")
+        f.write("[install]\ninstall-lib=/somewhere/else/")
+        from distutils.dist import Distribution
+        # patch the function that returns what config files are present
+        monkeypatch.setattr(
+            Distribution,
+            'find_config_files',
+            lambda self: [f],
+        )
+        scheme = distutils_scheme('example')
+        assert scheme['platlib'] == '/somewhere/else/'
+        assert scheme['purelib'] == '/somewhere/else/'
