@@ -24,6 +24,7 @@ def test_install_editable_from_git_with_https(script, tmpdir):
 
 
 @pytest.mark.network
+@pytest.mark.skip_if_missing('git')
 def test_install_noneditable_git(script, tmpdir):
     """
     Test installing from a non-editable git URL with a given tag.

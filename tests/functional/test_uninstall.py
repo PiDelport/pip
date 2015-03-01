@@ -219,6 +219,7 @@ def test_uninstall_editable_from_svn(script, tmpdir):
 
 
 @pytest.mark.network
+@pytest.mark.skip_if_missing('git')
 def test_uninstall_editable_with_source_outside_venv(script, tmpdir):
     """
     Test uninstalling editable install from existing source outside the venv.

@@ -134,6 +134,7 @@ def test_download_should_skip_existing_files(script):
 
 
 @pytest.mark.network
+@pytest.mark.skip_if_missing('git')
 def test_download_vcs_link(script):
     """
     It should allow -d flag for vcs links, regression test for issue #798.
